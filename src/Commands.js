@@ -20,6 +20,7 @@ const record = {
         all: {
           usage: 'List all records',
           shortcut: 'A',
+          type: 'string',
           required: false,
         },
       },

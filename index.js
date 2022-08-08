@@ -1,53 +1,13 @@
 'use strict';
-var cloudflare = require("./src/CloudflareDns.js")
-class cloudflareDnsPlugin {
-  constructor(serverless, options) {
-    
-    this.serverless = serverless;
-      
-    // Log if a --verbose option was passed:
-    console.log(options.verbose);
-    
-      this.hooks = {
-      'initialize': () => this.init(),
-      'before:deploy:deploy': () => this.beforeDeploy(),
-      'after:deploy:deploy': () => this.afterDeploy(),
-    };
-  };
-
-  init() {
-    // Initialization
-    const cloudflare = new cloudflare.CloudflareDns;
-    console.log('Serverless instance: ', this.serverless);
- 
-    // `serverless.service` contains the (resolved) serverless.yml config
-    const service = this.serverless.service;
-    console.log('Provider name: ', service.provider.name);
-    console.log('Functions: ', service.functions);
-  }
-
-  beforeDeploy() {
-    // Before deploy
-  }
-
-  afterDeploy() {
-    // After deploy
-  }
-};
-
-module.exports = cloudflareDnsPlugin;
-
 const _ = require('lodash');
-const BbPromise = require('bluebird');
-const BaseServerlessPlugin = require('base-serverless-plugin');
-const cloudflare = require("./src/CloudflareDns.js")
-// const CloudFlare = require('cloudflare');
-// const RecordCtl = require('./src/controller/RecordController.js');
+const Bb = require('bluebird');
+const BasePlugin = require('base-serverless-plugin');
+const Cloudflare = require("./src/CloudflareDns.js")
 const Commands = require('./src/Commands');
 
 const LOG_PREFFIX = '[ServerlessCloudFlare] -';
 
-class cloudflareDnsPlugin extends BaseServerlessPlugin {
+class ServerlessCloudFlarePlugin extends BasePlugin {
   /**
    * Serverless plugin constructor
    *
@@ -59,52 +19,51 @@ class cloudflareDnsPlugin extends BaseServerlessPlugin {
 
     this.hooks = {
       'info:info': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(() => this.cloudflare.listRecords())
           .then(this.log)
           .catch(_.identity),
       'after:deploy:deploy': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
           .then(() => this.cloudflare.createOrUpdate())
           .then(this.log)
           .catch(_.identity),
       'after:remove:remove': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(() => this.cloudflare.deleteRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:deploy:deploy': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
           .then(() => this.cloudflare.createOrUpdate())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:update:update': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
           .then(() => this.cloudflare.updateRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:remove:remove': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(() => this.cloudflare.deleteRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:list:list': () =>
-        BbPromise.bind(this)
+        Bb.bind(this)
           .then(this.initialize)
           .then(() => this.cloudflare.listRecords())
           .then(this.log)
           .catch(_.identity),
     };
-
     this.commands = Commands;
   }
 
@@ -117,18 +76,15 @@ class cloudflareDnsPlugin extends BaseServerlessPlugin {
       this.log('warning: plugin is disabled');
       return Promise.reject(new Error('PLUGIN_DISABLED'));
     }
-
     this.cfg = {
       auth: {},
       record: {},
     };
-
     // you can disable the serverless lifecycle events
     this.cfg.autoDeploy = this.getConf('autoDeploy', true);
     this.cfg.autoRemove = this.getConf('autoRemove', true);
 
     this.cfg.domain = this.getConf('domain');
-
     // this.cfg.auth.key = this.getConf('auth.key', undefined);
     // this.cfg.auth.email = this.getConf('auth.email', undefined);
     this.cfg.auth.apiToken = this.getConf('auth.apiToken', undefined);
@@ -149,13 +105,9 @@ class cloudflareDnsPlugin extends BaseServerlessPlugin {
     }
 
     const ctx = this;
-    this.CloudFlare = new CloudFlare( ctx )
-      // this.cfg.domain, this.cfg.auth.apiToken );
+    this.CloudFlare = new Cloudflare(ctx)
 
-    // const ctx = this;
-    // this.RecordCtl = new RecordCtl(ctx);
-
-    return BbPromise.resolve();
+    return Bb.resolve();
   }
 
   /**
@@ -196,7 +148,7 @@ class cloudflareDnsPlugin extends BaseServerlessPlugin {
       _.set(this.cfg, 'record.content', outFounds[0].OutputValue);
     }
 
-    return BbPromise.resolve();
+    return Bb.resolve();
   }
 
   /**

@@ -1,5 +1,5 @@
 {
-  "name": "cloudflare-dns-plugin",
+  "name": "sls-cloudflare-plugin",
   "version": "1.0.0",
   "description": "Cloudflare Dns plugin for serverless Framework",
   "main": "index.js",
@@ -7,10 +7,25 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Muhilan.Thillaivanan",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
-    "cloudflare-dns": "^1.0.5",
-    "lodash": "^4.17.21",
-    "node-cloudflare-dns": "^0.0.9"
-  }
+    "base-serverless-plugin": "^0.5.5",
+    "bluebird": "^3.7.2",
+    "lodash": "^4.17.21"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/muhil28/sls-cloudflare-plugin.git"
+  },
+  "keywords": [
+    "sls",
+    "cloudflare",
+    "dns",
+    "serverless",
+    "plugin"
+  ],
+  "bugs": {
+    "url": "https://github.com/muhil28/sls-cloudflare-plugin/issues"
+  },
+  "homepage": "https://github.com/muhil28/sls-cloudflare-plugin#readme"
 }

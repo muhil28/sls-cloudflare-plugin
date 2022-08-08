@@ -1,0 +1,219 @@
+'use strict';
+var cloudflare = require("./src/CloudflareDns.js")
+class cloudflareDnsPlugin {
+  constructor(serverless, options) {
+    
+    this.serverless = serverless;
+      
+    // Log if a --verbose option was passed:
+    console.log(options.verbose);
+    
+      this.hooks = {
+      'initialize': () => this.init(),
+      'before:deploy:deploy': () => this.beforeDeploy(),
+      'after:deploy:deploy': () => this.afterDeploy(),
+    };
+  };
+
+  init() {
+    // Initialization
+    const cloudflare = new cloudflare.CloudflareDns;
+    console.log('Serverless instance: ', this.serverless);
+ 
+    // `serverless.service` contains the (resolved) serverless.yml config
+    const service = this.serverless.service;
+    console.log('Provider name: ', service.provider.name);
+    console.log('Functions: ', service.functions);
+  }
+
+  beforeDeploy() {
+    // Before deploy
+  }
+
+  afterDeploy() {
+    // After deploy
+  }
+};
+
+module.exports = cloudflareDnsPlugin;
+
+const _ = require('lodash');
+const BbPromise = require('bluebird');
+const BaseServerlessPlugin = require('base-serverless-plugin');
+const cloudflare = require("./src/CloudflareDns.js")
+// const CloudFlare = require('cloudflare');
+// const RecordCtl = require('./src/controller/RecordController.js');
+const Commands = require('./src/Commands');
+
+const LOG_PREFFIX = '[ServerlessCloudFlare] -';
+
+class cloudflareDnsPlugin extends BaseServerlessPlugin {
+  /**
+   * Serverless plugin constructor
+   *
+   * @param {object} serverless serverless instance
+   * @param {object} options command line arguments
+   */
+  constructor(serverless, options) {
+    super(serverless, options, LOG_PREFFIX, 'cloudflare');
+
+    this.hooks = {
+      'info:info': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(() => this.cloudflare.listRecords())
+          .then(this.log)
+          .catch(_.identity),
+      'after:deploy:deploy': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(this.resolveCnameValue)
+          .then(() => this.cloudflare.createOrUpdate())
+          .then(this.log)
+          .catch(_.identity),
+      'after:remove:remove': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(() => this.cloudflare.deleteRecord())
+          .then(this.log)
+          .catch(_.identity),
+      'cloudflare:record:deploy:deploy': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(this.resolveCnameValue)
+          .then(() => this.cloudflare.createOrUpdate())
+          .then(this.log)
+          .catch(_.identity),
+      'cloudflare:record:update:update': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(this.resolveCnameValue)
+          .then(() => this.cloudflare.updateRecord())
+          .then(this.log)
+          .catch(_.identity),
+      'cloudflare:record:remove:remove': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(() => this.cloudflare.deleteRecord())
+          .then(this.log)
+          .catch(_.identity),
+      'cloudflare:record:list:list': () =>
+        BbPromise.bind(this)
+          .then(this.initialize)
+          .then(() => this.cloudflare.listRecords())
+          .then(this.log)
+          .catch(_.identity),
+    };
+
+    this.commands = Commands;
+  }
+
+  /**
+   * Initialize User config variables.
+   *
+   */
+  initialize() {
+    if (this.isPluginDisabled()) {
+      this.log('warning: plugin is disabled');
+      return Promise.reject(new Error('PLUGIN_DISABLED'));
+    }
+
+    this.cfg = {
+      auth: {},
+      record: {},
+    };
+
+    // you can disable the serverless lifecycle events
+    this.cfg.autoDeploy = this.getConf('autoDeploy', true);
+    this.cfg.autoRemove = this.getConf('autoRemove', true);
+
+    this.cfg.domain = this.getConf('domain');
+
+    // this.cfg.auth.key = this.getConf('auth.key', undefined);
+    // this.cfg.auth.email = this.getConf('auth.email', undefined);
+    this.cfg.auth.apiToken = this.getConf('auth.apiToken', undefined);
+    this.validateCredentials();
+
+    const record = this.getConf('record', {});
+    if (!_.isEmpty(record)) {
+      // REQUIRED FIELDS
+      this.cfg.record.name = this.getConf('record.name');
+      this.cfg.record.content = this.getConf('record.content');
+
+      // OPTIONALS FIELDS
+      this.cfg.record.type = this.getConf('record.type', 'CNAME');
+      this.cfg.record.priority = this.getConf('record.priority', undefined);
+      this.cfg.record.proxied = this.getConf('record.proxied', true);
+      this.cfg.record.proxiable = this.getConf('record.proxiable', true);
+      this.cfg.record.ttl = this.getConf('record.ttl', undefined);
+    }
+
+    const ctx = this;
+    this.CloudFlare = new CloudFlare( ctx )
+      // this.cfg.domain, this.cfg.auth.apiToken );
+
+    // const ctx = this;
+    // this.RecordCtl = new RecordCtl(ctx);
+
+    return BbPromise.resolve();
+  }
+
+  /**
+   * Resolve Cloud Formation Record Content useful for CloudFront (dinamic domain)
+   *
+   * @returns {Promise} Domain value
+   */
+  async resolveCnameValue() {
+    const expr = _.get(this.cfg, 'record.content');
+    const re = new RegExp(/^#\{cf:(.*)}/);
+
+    if (!_.isEmpty(expr) && expr.startsWith('#{')) {
+      const cfMatch = expr.match(re);
+
+      if (_.isEmpty(cfMatch) || cfMatch.length < 2) {
+        let msg = '';
+        msg += 'CLOUD_FLARE_CONFIG: Invalid Variable Syntax for ';
+        msg += '"CloudFormation" resolver... Should be #{cf:SomeOutputKey}. ';
+        throw new Error(msg);
+      }
+
+      const [, targetKey] = cfMatch;
+      const aws = this.serverless.getProvider('aws');
+      const q = { StackName: this.getStackName() };
+      const res = await aws.request('CloudFormation', 'describeStacks', q, {});
+
+      const allOutputs = _.get(res, 'Stacks[0].Outputs', []);
+      const outFounds = allOutputs.filter((out) => out.OutputKey === targetKey);
+
+      if (_.isEmpty(outFounds) || outFounds.length < 1) {
+        let msg = '';
+        msg += 'CLOUD_FLARE_KEY_NOT_FOUND: CloudFormation key not found ';
+        msg += `'${targetKey}'.. `;
+
+        throw new Error(msg);
+      }
+
+      _.set(this.cfg, 'record.content', outFounds[0].OutputValue);
+    }
+
+    return BbPromise.resolve();
+  }
+
+  /**
+   * Validate CloudFlare auth credentials methods.
+   *
+   */
+  validateCredentials() {
+    if (_.isEmpty(this.cfg.auth.apiToken)) {
+      // if (_.isEmpty(this.cfg.auth.email) || _.isEmpty(this.cfg.auth.key)) {
+        let err = '';
+        err += 'CLOUD_FLARE_AUTH_CRED_MISSING: ';
+        // err += 'Configure your email and key or use a apiToken.';
+
+        throw new Error(err);
+      // }
+    }
+  }
+}
+
+module.exports = ServerlessCloudFlarePlugin;

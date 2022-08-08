@@ -1,0 +1,16 @@
+{
+  "name": "cloudflare-dns-plugin",
+  "version": "1.0.0",
+  "description": "Cloudflare Dns plugin for serverless Framework",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Muhilan.Thillaivanan",
+  "license": "ISC",
+  "dependencies": {
+    "cloudflare-dns": "^1.0.5",
+    "lodash": "^4.17.21",
+    "node-cloudflare-dns": "^0.0.9"
+  }
+}

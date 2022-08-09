@@ -9,8 +9,7 @@ class CloudflareDns {
         this.ctx = ctx;
         this.zoneName= this.ctx.cfg.domain;
         this.hostName="api.cloudflare.com";
-        this.authorization = `Bearer ${this.ctx.cfg.auth.apiToken}` //${process.env.CF_API}`
-
+        this.authorization = `Bearer ${this.ctx.cfg.auth.apiToken.API_TOKEN}` //${process.env.CF_API}`
     }
     static validate(record) {
         const name = _.get(record, 'name');
@@ -80,26 +79,27 @@ class CloudflareDns {
     }
     async createOrUpdateRecord() {
         const { record } = this.ctx.cfg;
+        if (!CloudflareDns.validate(record)) return '';
 
-            if (!CloudflareDns.validate(record)) return '';
-
-            const oldRecord = await this.getRecord();
-            var id;
-            var oldContent;
-            if (!_.isEmpty(oldRecord)) {
-                id = _.get(oldRecord, 'id');
-                oldContent = _.get(oldRecord, 'content');
-            }
-            if (_.isEmpty(oldRecord)) {
-                return await this.createRecord();
-            } else if (oldContent !== record.content) {
-                return await this.updateRecord();
-            } else {
-                return 'CF_RECORD_EXISTENT';
-            }
+        const oldRecord = await this.getRecord();
+        var id;
+        var oldContent;
+        if (!_.isEmpty(oldRecord)) {
+            id = _.get(oldRecord, 'id');
+            oldContent = _.get(oldRecord, 'content');
+        }
+        if (_.isEmpty(oldRecord)) {
+            return await this.createRecord();
+        } else if (oldContent !== record.content) {
+            return await this.updateRecord();
+        } else {
+            return 'CF_RECORD_EXISTENT';
+        }
     }
     async createRecord() {
         const { record } = this.ctx.cfg;
+        console.log(`Record to be created...\n`)
+        console.log(record);
         const data = JSON.stringify({
             type: record.type,
             name: record.name,
@@ -158,7 +158,9 @@ class CloudflareDns {
             
                 response.on('end', () => {
                     const body = JSON.parse(data);
-                    console.log(body);
+                    for (const record of body.result) {
+                        console.log(record);
+                    }
                 });
             })
             request.on('error', (error) => {
@@ -204,6 +206,8 @@ class CloudflareDns {
     }
     async updateRecord() {
         const { record } = this.ctx.cfg;
+        console.log(`Record to be updated...\n`)
+        console.log(record);
         const data = JSON.stringify({
             type: record.type,
             name: record.name,
@@ -212,11 +216,11 @@ class CloudflareDns {
             proxied: record.proxied
         });
         const zoneId = await this.getZoneId();
-        const recordId = await this.getRecord().id;
+        const recordId = await this.getRecord();
         const options = {
                 hostname: this.hostName,
                 port: 443,
-                path: `/client/v4/zones/${zoneId}/dns_records/${recordId}`,
+                path: `/client/v4/zones/${zoneId}/dns_records/${recordId.id}`,
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -243,11 +247,11 @@ class CloudflareDns {
     }
     async deleteRecord() {
         const zoneId = await this.getZoneId();
-        const recordId = await this.getRecord().id;
+        const recordId = await this.getRecord();
         const options = {
                 hostname: this.hostName,
                 port: 443,
-                path: `/client/v4/zones/${zoneId}/dns_records/${recordId}`,
+                path: `/client/v4/zones/${zoneId}/dns_records/${recordId.id}`,
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

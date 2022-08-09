@@ -21,46 +21,46 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
       'info:info': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.cloudflare.listRecords())
+          .then(() => this.CloudFlare.listRecords())
           .then(this.log)
           .catch(_.identity),
       'after:deploy:deploy': () =>
         Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
-          .then(() => this.cloudflare.createOrUpdate())
+          .then(() => this.CloudFlare.createOrUpdateRecord())
           .then(this.log)
           .catch(_.identity),
       'after:remove:remove': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.cloudflare.deleteRecord())
+          .then(() => this.CloudFlare.deleteRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:deploy:deploy': () =>
         Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
-          .then(() => this.cloudflare.createOrUpdate())
+          .then(() => this.CloudFlare.createOrUpdateRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:update:update': () =>
         Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
-          .then(() => this.cloudflare.updateRecord())
+          .then(() => this.CloudFlare.updateRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:remove:remove': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.cloudflare.deleteRecord())
+          .then(() => this.CloudFlare.deleteRecord())
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:list:list': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.cloudflare.listRecords())
+          .then(() => this.CloudFlare.listRecords())
           .then(this.log)
           .catch(_.identity),
     };
@@ -76,38 +76,44 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
       this.log('warning: plugin is disabled');
       return Promise.reject(new Error('PLUGIN_DISABLED'));
     }
-    this.cfg = {
-      auth: {},
-      record: {},
-    };
-    // you can disable the serverless lifecycle events
-    this.cfg.autoDeploy = this.getConf('autoDeploy', true);
-    this.cfg.autoRemove = this.getConf('autoRemove', true);
+    console.log("Initializing cloudflare started...");
+    try {
+            this.cfg = {
+                auth: {},
+                record: {},
+            };
+            // you can disable the serverless lifecycle events
+            // this.cfg.autoDeploy = this.getConf('autoDeploy', true);
+            // this.cfg.autoRemove = this.getConf('autoRemove', true);
 
-    this.cfg.domain = this.getConf('domain');
-    // this.cfg.auth.key = this.getConf('auth.key', undefined);
-    // this.cfg.auth.email = this.getConf('auth.email', undefined);
-    this.cfg.auth.apiToken = this.getConf('auth.apiToken', undefined);
-    this.validateCredentials();
+            this.cfg.domain = this.getConf('domain');
 
-    const record = this.getConf('record', {});
-    if (!_.isEmpty(record)) {
-      // REQUIRED FIELDS
-      this.cfg.record.name = this.getConf('record.name');
-      this.cfg.record.content = this.getConf('record.content');
+            console.log(`Domain set to ${this.cfg.domain}`);
+            // this.cfg.auth.key = this.getConf('auth.key', undefined);
+            // this.cfg.auth.email = this.getConf('auth.email', undefined);
+            this.cfg.auth.apiToken = this.getConf('auth.apiToken', undefined);
+            this.validateCredentials();
 
-      // OPTIONALS FIELDS
-      this.cfg.record.type = this.getConf('record.type', 'CNAME');
-      this.cfg.record.priority = this.getConf('record.priority', undefined);
-      this.cfg.record.proxied = this.getConf('record.proxied', true);
-      this.cfg.record.proxiable = this.getConf('record.proxiable', true);
-      this.cfg.record.ttl = this.getConf('record.ttl', undefined);
-    }
+            const record = this.getConf('record', {});
+            if (!_.isEmpty(record)) {
+                // REQUIRED FIELDS
+                this.cfg.record.name = this.getConf('record.name');
+                this.cfg.record.content = this.getConf('record.content');
 
-    const ctx = this;
-    this.CloudFlare = new Cloudflare(ctx)
+                // OPTIONALS FIELDS
+                this.cfg.record.type = this.getConf('record.type', 'CNAME');
+                this.cfg.record.proxied = this.getConf('record.proxied', true);
+                this.cfg.record.proxiable = this.getConf('record.proxiable', true);
+                this.cfg.record.ttl = this.getConf('record.ttl', 3600);
+            }
+            const ctx = this;
+            this.CloudFlare = new Cloudflare(ctx)
 
-    return Bb.resolve();
+            console.log("Initialization Completed successfully");
+            return Bb.resolve();
+        } catch(error) {
+            console.log(error);
+        }
   }
 
   /**
@@ -116,39 +122,42 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
    * @returns {Promise} Domain value
    */
   async resolveCnameValue() {
-    const expr = _.get(this.cfg, 'record.content');
-    const re = new RegExp(/^#\{cf:(.*)}/);
+    try{
+        const expr = _.get(this.cfg, 'record.content');
+        const re = new RegExp(/^#\{cf:(.*)}/);
 
-    if (!_.isEmpty(expr) && expr.startsWith('#{')) {
-      const cfMatch = expr.match(re);
+        if (!_.isEmpty(expr) && expr.startsWith('#{')) {
+            const cfMatch = expr.match(re);
 
-      if (_.isEmpty(cfMatch) || cfMatch.length < 2) {
-        let msg = '';
-        msg += 'CLOUD_FLARE_CONFIG: Invalid Variable Syntax for ';
-        msg += '"CloudFormation" resolver... Should be #{cf:SomeOutputKey}. ';
-        throw new Error(msg);
-      }
+        if (_.isEmpty(cfMatch) || cfMatch.length < 2) {
+            let msg = '';
+            msg += 'CLOUD_FLARE_CONFIG: Invalid Variable Syntax for ';
+            msg += '"CloudFormation" resolver... Should be #{cf:SomeOutputKey}. ';
+            throw new Error(msg);
+        }
+        const [, targetKey] = cfMatch;
+        const aws = this.serverless.getProvider('aws');
+        const q = { StackName: this.serverless.getProvider('aws').naming.getStackName() };
+        const res = await aws.request('CloudFormation', 'describeStacks', q, {});
 
-      const [, targetKey] = cfMatch;
-      const aws = this.serverless.getProvider('aws');
-      const q = { StackName: this.getStackName() };
-      const res = await aws.request('CloudFormation', 'describeStacks', q, {});
+        const allOutputs = _.get(res, 'Stacks[0].Outputs', []);
+        const outFounds = allOutputs.filter((out) => out.OutputKey === targetKey);
 
-      const allOutputs = _.get(res, 'Stacks[0].Outputs', []);
-      const outFounds = allOutputs.filter((out) => out.OutputKey === targetKey);
+        if (_.isEmpty(outFounds) || outFounds.length < 1) {
+            let msg = '';
+            msg += 'CLOUD_FLARE_KEY_NOT_FOUND: CloudFormation key not found ';
+            msg += `'${targetKey}'.. `;
 
-      if (_.isEmpty(outFounds) || outFounds.length < 1) {
-        let msg = '';
-        msg += 'CLOUD_FLARE_KEY_NOT_FOUND: CloudFormation key not found ';
-        msg += `'${targetKey}'.. `;
+            throw new Error(msg);
+        }
 
-        throw new Error(msg);
-      }
+        _.set(this.cfg, 'record.content', outFounds[0].OutputValue);
+        }
 
-      _.set(this.cfg, 'record.content', outFounds[0].OutputValue);
+        return Bb.resolve();
+    }catch(error) {
+        console.log(error);
     }
-
-    return Bb.resolve();
   }
 
   /**
@@ -160,11 +169,10 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
       // if (_.isEmpty(this.cfg.auth.email) || _.isEmpty(this.cfg.auth.key)) {
         let err = '';
         err += 'CLOUD_FLARE_AUTH_CRED_MISSING: ';
-        // err += 'Configure your email and key or use a apiToken.';
-
         throw new Error(err);
       // }
     }
+    console.log("Validation of API_TOKEN Successful");
   }
 }
 

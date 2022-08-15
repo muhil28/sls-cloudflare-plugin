@@ -11,12 +11,6 @@ class CloudflareDns {
         this.hostName="api.cloudflare.com";
         this.authorization = `Bearer ${this.ctx.cfg.auth.apiToken.API_TOKEN}` //${process.env.CF_API}`
     }
-    static validate(record) {
-        const name = _.get(record, 'name');
-        const content = _.get(record, 'content');
-
-        return !_.isEmpty(name) && !_.isEmpty(content);
-    }
     async listZones() {
         const options = {
                 hostname: this.hostName,
@@ -76,25 +70,6 @@ class CloudflareDns {
             request.end()
         });
         return await zoneId;
-    }
-    async createOrUpdateRecord() {
-        const { record } = this.ctx.cfg;
-        if (!CloudflareDns.validate(record)) return '';
-
-        const oldRecord = await this.getRecord();
-        var id;
-        var oldContent;
-        if (!_.isEmpty(oldRecord)) {
-            id = _.get(oldRecord, 'id');
-            oldContent = _.get(oldRecord, 'content');
-        }
-        if (_.isEmpty(oldRecord)) {
-            return await this.createRecord();
-        } else if (oldContent !== record.content) {
-            return await this.updateRecord();
-        } else {
-            return 'CF_RECORD_EXISTENT';
-        }
     }
     async createRecord() {
         const { record } = this.ctx.cfg;

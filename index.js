@@ -21,46 +21,126 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
       'info:info': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.CloudFlare.listRecords())
+          .then(() => {
+              this.CloudFlare.listRecords()
+          })
           .then(this.log)
           .catch(_.identity),
       'after:deploy:deploy': () =>
         Bb.bind(this)
           .then(this.initialize)
           .then(this.resolveCnameValue)
-          .then(() => this.CloudFlare.createOrUpdateRecord())
+          .then(async () => {
+              for (const record of this.CloudFlare.ctx.cfg.records){
+                this.CloudFlare.ctx.cfg.record = record;
+                try{
+                    await this.resolveCnameValue()
+
+                    if (!this.validate(record)) return 'Invalid';
+                    const oldRecord = await this.CloudFlare.getRecord();
+                    var id;
+                    var oldContent;
+                    if (!_.isEmpty(oldRecord)) {
+                        id = _.get(oldRecord, 'id');
+                        oldContent = _.get(oldRecord, 'content');
+                    }
+                    if (_.isEmpty(oldRecord)) {
+                        await this.CloudFlare.createRecord();
+                    } else if (oldContent !== record.content) {
+                        await this.CloudFlare.updateRecord();
+                    } else {
+                        console.log('CF_RECORD_EXISTENT');
+                        }
+                }catch(err){
+                    console.log(err);
+                }
+              }
+          })
           .then(this.log)
           .catch(_.identity),
       'after:remove:remove': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.CloudFlare.deleteRecord())
+          .then(async () => {
+              for (const record of this.CloudFlare.ctx.cfg.records){
+                this.CloudFlare.ctx.cfg.record = record;
+                try{
+                 await this.CloudFlare.deleteRecord()
+                }catch(err){
+                    console.log(err);
+                }
+              }
+          })
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:deploy:deploy': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(this.resolveCnameValue)
-          .then(() => this.CloudFlare.createOrUpdateRecord())
+          .then(async () => {
+              for (const record of this.CloudFlare.ctx.cfg.records){
+                this.CloudFlare.ctx.cfg.record = record;
+                try{
+                    await this.resolveCnameValue()
+
+                    if (!this.validate(record)) return 'Invalid';
+                    const oldRecord = await this.CloudFlare.getRecord();
+                    var id;
+                    var oldContent;
+                    if (!_.isEmpty(oldRecord)) {
+                        id = _.get(oldRecord, 'id');
+                        oldContent = _.get(oldRecord, 'content');
+                    }
+                    if (_.isEmpty(oldRecord)) {
+                        await this.CloudFlare.createRecord();
+                    } else if (oldContent !== record.content) {
+                        await this.CloudFlare.updateRecord();
+                    } else {
+                        console.log('CF_RECORD_EXISTENT');
+                        }
+                }catch(err){
+                    console.log(err);
+                }
+              }
+          })
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:update:update': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(this.resolveCnameValue)
-          .then(() => this.CloudFlare.updateRecord())
+          .then(async () => {
+              for (const record of this.CloudFlare.ctx.cfg.records){
+                this.CloudFlare.ctx.cfg.record = record;
+                try{
+                    await this.resolveCnameValue()
+                    await this.CloudFlare.updateRecord()
+                } catch(error) {
+                    console.log(error);
+                }
+              }
+          })
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:remove:remove': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.CloudFlare.deleteRecord())
+          .then(async () => {
+              for (const record of this.CloudFlare.ctx.cfg.records){
+                this.CloudFlare.ctx.cfg.record = record;
+                try{
+                 await this.CloudFlare.deleteRecord()
+                }catch(err){
+                    console.log(err);
+                }
+              }
+          })
           .then(this.log)
           .catch(_.identity),
       'cloudflare:record:list:list': () =>
         Bb.bind(this)
           .then(this.initialize)
-          .then(() => this.CloudFlare.listRecords())
+          .then(() => {
+              this.CloudFlare.listRecords()
+          })
           .then(this.log)
           .catch(_.identity),
     };
@@ -79,8 +159,7 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
     console.log("Initializing cloudflare started...");
     try {
             this.cfg = {
-                auth: {},
-                record: {},
+                auth: {}
             };
             // you can disable the serverless lifecycle events
             // this.cfg.autoDeploy = this.getConf('autoDeploy', true);
@@ -94,17 +173,10 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
             this.cfg.auth.apiToken = this.getConf('auth.apiToken', undefined);
             this.validateCredentials();
 
-            const record = this.getConf('record', {});
-            if (!_.isEmpty(record)) {
+            const records = this.getConf('records', {});
+            if (!_.isEmpty(records)) {
                 // REQUIRED FIELDS
-                this.cfg.record.name = this.getConf('record.name');
-                this.cfg.record.content = this.getConf('record.content');
-
-                // OPTIONALS FIELDS
-                this.cfg.record.type = this.getConf('record.type', 'CNAME');
-                this.cfg.record.proxied = this.getConf('record.proxied', true);
-                this.cfg.record.proxiable = this.getConf('record.proxiable', true);
-                this.cfg.record.ttl = this.getConf('record.ttl', 3600);
+                this.cfg.records =  records;
             }
             const ctx = this;
             this.CloudFlare = new Cloudflare(ctx)
@@ -116,6 +188,12 @@ class ServerlessCloudFlarePlugin extends BasePlugin {
         }
   }
 
+  validate(record) {
+      const name = _.get(record, 'name');
+      const content = _.get(record, 'content');
+
+      return !_.isEmpty(name) && !_.isEmpty(content);
+  }
   /**
    * Resolve Cloud Formation Record Content useful for CloudFront (dinamic domain)
    *

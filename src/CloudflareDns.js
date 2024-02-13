@@ -81,7 +81,8 @@ class CloudflareDns {
             content: record.content,
             ttl: record.ttl,
             priority: record.priority,
-            proxied: record.proxied
+            proxied: record.proxied,
+            tags: record.tags
         });
         const zoneId = await this.getZoneId()
         const options = {
@@ -188,7 +189,8 @@ class CloudflareDns {
             name: record.name,
             content: record.content,
             ttl: record.ttl,
-            proxied: record.proxied
+            proxied: record.proxied,
+            tags: record.tags
         });
         const zoneId = await this.getZoneId();
         const recordId = await this.getRecord();
